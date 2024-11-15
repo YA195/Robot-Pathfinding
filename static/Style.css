@@ -1,0 +1,168 @@
+body {
+  display: flex;
+  align-items: flex-start;
+  min-height: 100vh;
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background-color: #2a2a2a;
+  color: #f4f4f4;
+  overflow: hidden;
+}
+
+.main-container {
+  display: flex;
+  height: 100%;
+  position: relative;
+  padding-right: 150px;
+}
+
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(11, 40px);
+  grid-template-rows: repeat(11, 40px);
+  gap: 2px;
+  margin: 20px;
+  border: 3px solid #2d2450f0;
+  flex-grow: 1;
+}
+
+.cell {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #555;
+  background-color: #333;
+  transition: background-color 0.3s;
+}
+
+.cell.empty { background-color: #333; }
+.cell.wall { background-color: #222; }
+.cell.table { background-color: #e74c3c; }
+.cell.kitchen { background-color: #27ae60; }
+.cell.path { background-color: #3498db; }
+
+.sidebar {
+  width: 250px;
+  background-color: #333;
+  color: white;
+  padding: 20px;
+  position: fixed;
+  right: 0;
+  top: 0;
+  height: 100vh;
+  box-shadow: -2px 0px 5px rgba(0, 0, 0, 0.2);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #888 #333;
+}
+
+.sidebar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background-color: #888;
+  border-radius: 4px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: #333;
+}
+
+.sidebar h1 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+button {
+  background-color: #3498db;
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  margin: 10px;
+  cursor: pointer;
+  font-size: 16px;
+  border-radius: 5px;
+  transition: background-color 0.3s;
+}
+
+button:hover {
+  background-color: #2980b9;
+}
+
+#cost {
+  margin-top: 20px;
+  font-size: 18px;
+}
+
+.cell.black {
+  background-color: black;
+  transition: background-color 0.3s;
+}
+
+.cell.hidden {
+  background-color: black;
+}
+
+.cell.revealed {
+  transition: background-color 0.3s;
+}
+
+.sidebar h2 {
+  color: #28459f;
+  margin-top: 20px;
+  margin-bottom: 10px;
+}
+
+.comparison-table {
+  background-color: #333;
+  padding: 20px;
+  border-radius: 10px;
+  color: #f4f4f4;
+  box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.5);
+}
+
+.comparison-table h2 {
+  text-align: center;
+  color: #28459f;
+  margin-bottom: 20px;
+}
+
+.comparison-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.comparison-table th,
+.comparison-table td {
+  text-align: center;
+  padding: 12px 15px;
+  border: 1px solid #444;
+}
+
+.comparison-table th {
+  background-color: #444;
+  color: #fff;
+  font-weight: bold;
+}
+
+.comparison-table td {
+  background-color: #555;
+}
+
+.comparison-table tr:nth-child(even) {
+  background-color: #444;
+}
+
+.comparison-table tr:hover {
+  background-color: #666;
+}
+
+.comparison-table td {
+  font-size: 14px;
+}

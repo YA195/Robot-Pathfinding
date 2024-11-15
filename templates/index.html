@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robot Pathfinding</title> 
+    <link rel="stylesheet" href="{{ url_for('static', filename='Style.css') }}">
+</head>
+<body onload="revealMap()">
+
+<div class="main-container">
+    <div id="grid" class="grid-container">
+        {% for row_index, row in enumerate(map_layout) %}
+            {% for cell_index, cell in enumerate(row) %}
+                <div class="cell black
+                    {% if cell == 's' %}empty{% elif cell == 'w' %}wall{% elif cell == 't' %}table{% elif cell == 'p' %}kitchen{% endif %}"
+                    data-row="{{ row_index }}" data-col="{{ cell_index }}">
+                </div>
+            {% endfor %}
+        {% endfor %}
+    </div>
+
+    <div class="comparison-table">
+        <h2>Algorithm Comparison</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Algorithm</th>
+                    <th>Time (µs)</th>
+                    <th>Space</th>
+                    <th>Optimality</th>
+                    <th>Completeness</th>
+                </tr>
+            </thead>
+            <tbody id="comparisonTableBody">
+            </tbody>
+        </table>
+    </div>
+
+    <div class="sidebar">
+        <h1>Robot Pathfinding</h1>
+        <button onclick="generateMap()">Generate Map</button>
+
+        <div class="controls">
+            <h2>UN Informed Search</h2>
+            <button onclick="fetchPath('bfs')">BFS</button>
+            <button onclick="fetchPath('dfs')">DFS</button>
+            <button onclick="fetchPath('ucs')">UCS</button>
+            <button onclick="fetchPath('ids')">IDS</button>
+            
+            <h2>Heuristic Search</h2>
+            <button onclick="fetchPath('greedy_euclidean')">Greedy Best-First (Euclidean)</button>
+            <button onclick="fetchPath('greedy_manhattan')">Greedy Best-First (Manhattan)</button>
+            <button onclick="fetchPath('astar_euclidean')">A* (Euclidean)</button>
+            <button onclick="fetchPath('astar_manhattan')">A* (Manhattan)</button>
+        </div>
+        
+        <div id="cost"></div>
+        
+        <div class="goal-setter">
+            <h2>Set Goal</h2>
+            <p id="goalMessage">Click on a table to set the goal.</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentStep = 0;
+    let path = [];
+    let goal = null;
+    let currentMap = null;
+
+    function fetchPath(algorithm) {
+        if (!goal) {
+            alert("Please set the goal before running an algorithm.");
+            return;
+        }
+        clearOldPath();
+        const startTime = performance.now();
+        fetch(`/path?algorithm=${algorithm}`)
+            .then(response => response.json())
+            .then(data => {
+                path = data.path || [];
+                document.getElementById('cost').innerText = `Cost: ${data.cost} steps`;
+                const endTime = performance.now();
+                const elapsedTimeInMicroseconds = ((endTime - startTime) * 1000).toFixed(0);
+                data.performance.time = elapsedTimeInMicroseconds;
+                updateComparisonTable(data.performance, algorithm);
+                drawPathStepByStep();
+            })
+            .catch(error => console.error('Error:', error));
+    }
+
+    function clearOldPath() {
+        const cells = document.querySelectorAll('.cell.path');
+        cells.forEach(cell => cell.classList.remove('path'));
+        currentStep = 0;
+    }
+
+    function drawPathStepByStep() {
+        if (currentStep < path.length) {
+            const [y, x] = path[currentStep];
+            const cell = document.querySelector(`#grid .cell[data-row="${y}"][data-col="${x}"]`);
+            if (cell) cell.classList.add('path');
+            currentStep++;
+            setTimeout(drawPathStepByStep, 300);
+        }
+    }
+
+    function updateComparisonTable(performance, algorithm) {
+        const tableBody = document.getElementById('comparisonTableBody');
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${algorithm}</td>
+            <td>${performance.time} µs</td>
+            <td>${performance.space}</td>
+            <td>${performance.optimality}</td>
+            <td>${performance.completeness}</td>
+        `;
+        tableBody.appendChild(row);
+    }
+
+    function generateMap() {
+        fetch('/generate-map')
+            .then(response => response.json())
+            .then(data => {
+                const grid = document.getElementById('grid');
+                grid.innerHTML = '';
+                const mapLayout = data.map_layout;
+                currentMap = mapLayout;
+
+                mapLayout.forEach((row, rowIndex) => {
+                    row.split('').forEach((cell, colIndex) => {
+                        const cellDiv = document.createElement('div');
+                        cellDiv.classList.add('cell', 'black');
+                        cellDiv.dataset.row = rowIndex;
+                        cellDiv.dataset.col = colIndex;
+
+                        if (cell === 's') cellDiv.classList.add('empty');
+                        else if (cell === 'w') cellDiv.classList.add('wall');
+                        else if (cell === 't') cellDiv.classList.add('table');
+                        else if (cell === 'p') cellDiv.classList.add('kitchen');
+
+                        grid.appendChild(cellDiv);
+                    });
+                });
+
+                clearOldPath();
+                resetGoal();
+                revealMap();
+                clearComparisonTable();
+            });
+    }
+
+    function clearComparisonTable() {
+        const tableBody = document.getElementById('comparisonTableBody');
+        tableBody.innerHTML = '';
+    }
+
+    function resetGoal() {
+        goal = null;
+        document.getElementById('goalMessage').innerText = 'Click on a table to set the goal.';
+        clearComparisonTable();
+    }   
+
+    function revealMap() {
+        const cells = document.querySelectorAll('.cell.black');
+        let revealedCells = 0;
+        const cellsToReveal = 5;
+        const interval = setInterval(() => {
+            for (let i = 0; i < cellsToReveal && revealedCells < cells.length; i++) {
+                cells[revealedCells].classList.remove('black');
+                cells[revealedCells].classList.add('revealed');
+                revealedCells++;
+            }
+            if (revealedCells >= cells.length) clearInterval(interval);
+        }, 100);
+    }
+
+    document.getElementById('grid').addEventListener('click', function(event) {
+        const cell = event.target;
+        if (cell.classList.contains('table')) {
+            const row = cell.dataset.row;
+            const col = cell.dataset.col;
+            goal = [parseInt(row), parseInt(col)];
+
+            fetch('/set_goal', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ goal })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('goalMessage').innerText = `Goal set at (${row}, ${col})`;
+                clearOldPath();
+                clearComparisonTable();
+            });
+        }
+    });
+</script>
+
+</body>
+</html>
