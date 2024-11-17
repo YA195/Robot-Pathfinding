@@ -30,6 +30,7 @@
                     <th>Space</th>
                     <th>Optimality</th>
                     <th>Completeness</th>
+                    <th>Cost</th>
                 </tr>
             </thead>
             <tbody id="comparisonTableBody">
@@ -53,6 +54,11 @@
             <button onclick="fetchPath('greedy_manhattan')">Greedy Best-First (Manhattan)</button>
             <button onclick="fetchPath('astar_euclidean')">A* (Euclidean)</button>
             <button onclick="fetchPath('astar_manhattan')">A* (Manhattan)</button>
+
+            <h2>Local Search</h2>
+            <button onclick="fetchPath('hill_climbing')">Hill Climbing</button>
+            <button onclick="fetchPath('simulated_annealing')">Simulated Annealing</button>
+            <button onclick="fetchPath('genetic_algorithms')">Genetic Algorithms</button>
         </div>
         
         <div id="cost"></div>
@@ -116,6 +122,7 @@
             <td>${performance.space}</td>
             <td>${performance.optimality}</td>
             <td>${performance.completeness}</td>
+            <td>${performance.cost}</td>
         `;
         tableBody.appendChild(row);
     }
