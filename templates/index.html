@@ -31,6 +31,7 @@
                     <th>Optimality</th>
                     <th>Completeness</th>
                     <th>Cost</th>
+                    <th>Reward</th>
                 </tr>
             </thead>
             <tbody id="comparisonTableBody">
@@ -46,26 +47,27 @@
             <p id="goalMessage">Click on tables to add/remove goals.</p>
         </div>
         <button onclick="generateMap()">Generate Map</button>
-
-        <div class="controls">
-            <h2>UN Informed Search</h2>
-            <button onclick="fetchPath('bfs')">BFS</button>
-            <button onclick="fetchPath('dfs')">DFS</button>
-            <button onclick="fetchPath('ucs')">UCS</button>
-            <button onclick="fetchPath('ids')">IDS</button>
+            <div class="controls">
+                <h2>UN Informed Search</h2>
+                <button onclick="fetchPath('bfs')">BFS</button>
+                <button onclick="fetchPath('dfs')">DFS</button>
+                <button onclick="fetchPath('ucs')">UCS</button>
+                <button onclick="fetchPath('ids')">IDS</button>
             
-            <h2>Heuristic Search</h2>
-            <button onclick="fetchPath('greedy_euclidean')">Greedy Best-First (Euclidean)</button>
-            <button onclick="fetchPath('greedy_manhattan')">Greedy Best-First (Manhattan)</button>
-            <button onclick="fetchPath('astar_euclidean')">A* (Euclidean)</button>
-            <button onclick="fetchPath('astar_manhattan')">A* (Manhattan)</button>
+                <h2>Heuristic Search</h2>
+                <button onclick="fetchPath('greedy_euclidean')">Greedy Best-First (Euclidean)</button>
+                <button onclick="fetchPath('greedy_manhattan')">Greedy Best-First (Manhattan)</button>
+                <button onclick="fetchPath('astar_euclidean')">A* (Euclidean)</button>
+                <button onclick="fetchPath('astar_manhattan')">A* (Manhattan)</button>
 
-            <h2>Local Search</h2>
-            <button onclick="fetchPath('hill_climbing')">Hill Climbing</button>
-            <button onclick="fetchPath('simulated_annealing')">Simulated Annealing</button>
-            <button onclick="fetchPath('genetic_algorithms')">Genetic Algorithms</button>
-        </div>
-        
+                <h2>Local Search</h2>
+                <button onclick="fetchPath('hill_climbing')">Hill Climbing</button>
+                <button onclick="fetchPath('simulated_annealing')">Simulated Annealing</button>
+                <button onclick="fetchPath('genetic_algorithms')">Genetic Algorithms</button>
+
+                <h2>Reinforcement Learning</h2>
+                <button onclick="fetchPath('q_learning')">Q-Learning</button>
+            </div>
         <div id="cost"></div>
         
         <div class="goal-setter">
@@ -111,16 +113,38 @@
         cells.forEach(cell => cell.classList.remove('path'));
         currentStep = 0;
     }
-
-    function drawPathStepByStep() {
-        if (currentStep < path.length) {
-            const [y, x] = path[currentStep];
-            const cell = document.querySelector(`#grid .cell[data-row="${y}"][data-col="${x}"]`);
-            if (cell) cell.classList.add('path');
-            currentStep++;
-            setTimeout(drawPathStepByStep, 300);
-        }
-    }
+      function drawPathStepByStep() {
+      const stepSound = document.getElementById('stepSound');
+      const goalSound = document.getElementById('goalSound');
+      const previousRobot = document.querySelector('.robot-head');
+      if (previousRobot) {
+          previousRobot.classList.remove('robot-head');
+      }
+    
+      if (currentStep < path.length) {
+          const [y, x] = path[currentStep];
+          const cell = document.querySelector(`#grid .cell[data-row="${y}"][data-col="${x}"]`);
+          if (cell) {
+              cell.classList.add('path');
+              cell.classList.add('robot-head');
+            
+              // Play step sound for regular moves
+              stepSound.currentTime = 0;
+              stepSound.play();
+            
+              // Play victory sound when reaching the goal
+              if (currentStep === path.length - 1) {
+                  setTimeout(() => {
+                      goalSound.currentTime = 0;
+                      goalSound.play();
+                  }, 300);
+              }
+          }
+          currentStep++;
+          setTimeout(drawPathStepByStep, 300);
+      }
+  }
+    
 
     function updateComparisonTable(performance, algorithm) {
         const tableBody = document.getElementById('comparisonTableBody');
@@ -132,6 +156,7 @@
             <td>${performance.optimality}</td>
             <td>${performance.completeness}</td>
             <td>${performance.cost}</td>
+            <td>${performance.reward}</td>
         `;
         tableBody.appendChild(row);
     }
@@ -222,3 +247,20 @@
 
 </body>
 </html>
+
+<style>
+.visited-1 { background-color: #4a90e2; }
+.visited-2 { background-color: #357abd; }
+.visited-3 { background-color: #2c6aa1; }
+.visited-4 { background-color: #1d4f7c; }
+.visited-5 { background-color: #0f3557; }
+.robot-position { background-color: #2ecc71; }
+</style>
+
+<!-- Add this after the body tag -->
+<audio id="stepSound" preload="auto">
+    <source src="{{ url_for('static', filename='step.mp3') }}" type="audio/mp3">
+</audio>
+<audio id="goalSound" preload="auto">
+    <source src="{{ url_for('static', filename='goal.mp3') }}" type="audio/mp3">
+</audio>

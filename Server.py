@@ -1,5 +1,5 @@
 from flask import Flask, render_template, jsonify, request
-from collections import deque
+from collections import deque, defaultdict
 import random
 import time  
 import heapq
@@ -574,8 +574,73 @@ def genetic_algorithm(start, goal, population_size=100, generations=1000, mutati
  
 
 
+def get_reward(current_state, next_state, goal, path_length):
+    # Distance metrics
+    current_distance = abs(current_state[0] - goal[0]) + abs(current_state[1] - goal[1])
+    next_distance = abs(next_state[0] - goal[0]) + abs(next_state[1] - goal[1])
+    
+    # Core rewards
+    if next_state == goal:
+        return 2000
+    
+    if not is_valid_move(next_state[0], next_state[1]):
+        return -1000
+    
+    # Progressive rewards
+    distance_improvement = current_distance - next_distance
+    distance_reward = 100 * distance_improvement
+    
+    # Path optimization
+    efficiency_factor = 100 / (path_length + 1)
+    
+    # Movement rewards
+    movement_reward = 50 if next_distance < current_distance else -30
+    
+    return distance_reward + efficiency_factor + movement_reward
 
+def q_learning(start, goal, episodes=500, alpha=0.1, gamma=0.9, epsilon=0.1):
+    Q = defaultdict(lambda: defaultdict(float))
+    actions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+    best_path = []
+    max_space = 0
+    total_reward = 0
 
+    for episode in range(episodes):
+        current_state = start
+        path = [current_state]
+        episode_reward = 0
+        visited = {current_state}
+        
+        while current_state != goal:
+            valid_actions = [a for a in actions if is_valid_move(current_state[0] + a[0], current_state[1] + a[1])]
+            if not valid_actions:
+                break
+                
+            if random.random() < epsilon:
+                action = random.choice(valid_actions)
+            else:
+                action = max(valid_actions, key=lambda a: Q[current_state][a])
+            
+            next_state = (current_state[0] + action[0], current_state[1] + action[1])
+            reward = get_reward(current_state, next_state, goal, len(path))
+            episode_reward += reward
+            
+            next_max = max([Q[next_state][a] for a in valid_actions], default=0)
+            Q[current_state][action] += alpha * (reward + gamma * next_max - Q[current_state][action])
+            
+            current_state = next_state
+            path.append(current_state)
+            visited.add(current_state)
+            max_space = max(max_space, len(visited))
+            
+            if len(path) > 100:
+                break
+        
+        if current_state == goal and (not best_path or len(path) < len(best_path)):
+            best_path = path.copy()
+            total_reward = episode_reward
+
+    return best_path, max_space, total_reward
 
 
 # region Flask
@@ -598,14 +663,7 @@ def get_path():
     start = (9, 0)
     global goals_positions
 
-    # Initialize empty lists/variables
-    final_path = []
-    total_space = 0
-    execution_time = 0
-
-    # Check for goals
-    if not goals_positions:
-        # Return a properly structured response even when no goals
+    if len(goals_positions) == 0:
         return jsonify({
             "path": [],
             "cost": 0,
@@ -620,10 +678,21 @@ def get_path():
 
     current_position = start
     start_time = time.time()
-    
+    final_path = []
+    total_space = 0
+
     for goal in goals_positions:
         try:
-            if algorithm == 'bfs':
+            if algorithm == 'q_learning':
+                total_reward = 0
+                path_segment, space, reward = q_learning(current_position, goal)
+                print(f"Q-Learning space for goal {goal}: {space}, reward: {reward}")
+                if path_segment:
+                    final_path.extend(path_segment[:-1] if len(final_path) > 0 else path_segment)
+                    total_space += space
+                    total_reward += reward
+                    current_position = goal           
+            elif algorithm == 'bfs':
                 path_segment, space = bfs(current_position, goal)
                 print(f"BFS space for goal {goal}: {space}")
             elif algorithm == 'dfs':
@@ -671,7 +740,6 @@ def get_path():
     end_time = time.time()
     execution_time = int((end_time - start_time) * 1000)
 
-    # Calculate total optimal path through all goals
     total_shortest_path = []
     current_pos = start
     for goal in goals_positions:
@@ -680,14 +748,14 @@ def get_path():
             total_shortest_path.extend(shortest_segment[:-1] if len(total_shortest_path) > 0 else shortest_segment)
             current_pos = goal
 
-    print(f"Total shortest path length: {len(total_shortest_path)}")
-
     performance = {
         "time": execution_time,
         "space": total_space,
         "optimality": "Yes" if final_path and len(final_path) == len(total_shortest_path) else "No",
         "completeness": "Yes" if final_path else "No",
-        "cost": len(final_path) if final_path else 0
+        "cost": len(final_path) if final_path else 0,
+        "reward": total_reward if 'total_reward' in locals() else 0
+
     }
 
     return jsonify({
@@ -706,3 +774,4 @@ if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0')
 
  #endregion
+

@@ -187,3 +187,14 @@ button:hover {
   display: flex;
   justify-content: space-between;
 }
+
+.robot-head {
+  background-color: transparent !important;
+  font-size: 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.robot-head::after {
+  content: '🤖';
+}
