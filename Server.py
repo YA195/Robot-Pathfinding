@@ -582,93 +582,119 @@ def genetic_algorithm(start, goal, population_size=100, generations=1000, mutati
 
 @app.route('/')
 def index():
-    return render_template('index.html', map_layout=map_layout, path=[], goal=None, enumerate=enumerate)
+    return render_template('index.html', map_layout=map_layout, path=[], goals=[], enumerate=enumerate)
 
-goal_position = None
+goals_positions = []
 
 @app.route('/set_goal', methods=['POST'])
 def set_goal():
-    global goal_position
-    goal_position = tuple(request.json.get('goal'))
-    return jsonify({"message": "Goal set", "goal": goal_position})
+    global goals_positions
+    goals_positions = [tuple(goal) for goal in request.json.get('goals', [])]
+    return jsonify({"message": "Goals set", "goals": goals_positions})
 
 @app.route('/path', methods=['GET'])
 def get_path():
     algorithm = request.args.get('algorithm')
     start = (9, 0)
-    global goal_position
+    global goals_positions
 
-    if goal_position is None:
-        return jsonify({"error": "Goal not set"}), 400
+    # Initialize empty lists/variables
+    final_path = []
+    total_space = 0
+    execution_time = 0
 
+    # Check for goals
+    if not goals_positions:
+        # Return a properly structured response even when no goals
+        return jsonify({
+            "path": [],
+            "cost": 0,
+            "performance": {
+                "time": 0,
+                "space": 0,
+                "optimality": "No",
+                "completeness": "No",
+                "cost": 0
+            }
+        }), 400
+
+    current_position = start
     start_time = time.time()
-    path = []
-    space = 0
-    heuristics = []
-    current_cost = []
-    f_value = []
-    total_cost = 0
+    
+    for goal in goals_positions:
+        try:
+            if algorithm == 'bfs':
+                path_segment, space = bfs(current_position, goal)
+                print(f"BFS space for goal {goal}: {space}")
+            elif algorithm == 'dfs':
+                path_segment, space = dfs(current_position, goal)
+                print(f"DFS space for goal {goal}: {space}")
+            elif algorithm == 'ids':
+                path_segment, space, cost = iterative_deepening_search(current_position, goal)
+                print(f"IDS space for goal {goal}: {space}")
+            elif algorithm == 'ucs':
+                path_segment, space, cost = ucs(current_position, goal)
+                print(f"UCS space for goal {goal}: {space}")
+            elif algorithm == 'greedy_manhattan':
+                path_segment, heuristics, cost, space = greedy_best_first_search(current_position, goal, heuristic_manhattan)
+                print(f"Greedy Manhattan space for goal {goal}: {space}")
+            elif algorithm == 'greedy_euclidean':
+                path_segment, heuristics, cost, space = greedy_best_first_search(current_position, goal, heuristic_euclidean)
+                print(f"Greedy Euclidean space for goal {goal}: {space}")
+            elif algorithm == 'astar_euclidean':
+                path_segment, heuristics, current_cost, f_value, total_cost, space = a_star_search(current_position, goal, heuristic_euclidean)
+                print(f"A* Euclidean space for goal {goal}: {space}")
+            elif algorithm == 'astar_manhattan':
+                path_segment, heuristics, current_cost, f_value, total_cost, space = a_star_search(current_position, goal, heuristic_manhattan)
+                print(f"A* Manhattan space for goal {goal}: {space}")
+            elif algorithm == 'hill_climbing':
+                path_segment, space = hill_climbing(current_position, goal, heuristic_manhattan)
+                print(f"Hill Climbing space for goal {goal}: {space}")
+            elif algorithm == 'simulated_annealing':
+                path_segment, space = simulated_annealing(current_position, goal, heuristic_manhattan)
+                print(f"Simulated Annealing space for goal {goal}: {space}")
+            elif algorithm == 'genetic_algorithms':
+                path_segment, fitness_score = genetic_algorithm(current_position, goal)
+                space = len(path_segment)
+                print(f"Genetic Algorithms space for goal {goal}: {space}")
+            else:
+                return jsonify({"error": "Algorithm not found"}), 404
 
-    try:
-        if algorithm == 'bfs':
-            path, space = bfs(start, goal_position)
-            print("BFS space:", space)   
-        elif algorithm == 'dfs':
-            path, space = dfs(start, goal_position)
-            print("DFS space:", space)   
-        elif algorithm == 'ids':
-            path, space, cost = iterative_deepening_search(start, goal_position)
-            print("IDS space:", space)   
-        elif algorithm == 'ucs':
-            path, space, cost = ucs(start, goal_position)
-            print("UCS space:", space)   
-        elif algorithm == 'greedy_manhattan':
-            path, heuristics, cost, space = greedy_best_first_search(start, goal_position, heuristic_manhattan)
-            print("Greedy Manhattan space:", space)   
-        elif algorithm == 'greedy_euclidean':
-            path, heuristics, cost, space = greedy_best_first_search(start, goal_position, heuristic_euclidean)
-            print("Greedy Euclidean space:", space)   
-        elif algorithm == 'astar_euclidean':
-            path, heuristics, current_cost, f_value, total_cost, space = a_star_search(start, goal_position, heuristic_euclidean)
-            print("A* Euclidean space:", space)   
-        elif algorithm == 'astar_manhattan':
-            path, heuristics, current_cost, f_value, total_cost, space = a_star_search(start, goal_position, heuristic_manhattan)
-            print("A* Manhattan space:", space)   
-        elif algorithm == 'hill_climbing':
-            path, space = hill_climbing(start, goal_position, heuristic_manhattan)
-            print("Hill Climbing space:", space)   
-        elif algorithm == 'simulated_annealing':
-            path, space = simulated_annealing(start, goal_position, heuristic_manhattan)
-            print("Simulated Annealing space:", space)   
-        elif algorithm == 'genetic_algorithms':
-            path, fitness_score = genetic_algorithm(start, goal_position)
-            space = len(path)
-            print("Genetic Algorithms space:", space)   
+            if path_segment:
+                final_path.extend(path_segment[:-1] if len(final_path) > 0 else path_segment)
+                total_space += space
+                current_position = goal
 
-        else:
-            return jsonify({"error": "Algorithm not found"}), 404
-    except Exception as e:
-        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+        except Exception as e:
+            return jsonify({"error": f"An error occurred: {str(e)}"}), 500
 
     end_time = time.time()
     execution_time = int((end_time - start_time) * 1000)
-    true_shortest_path, _ = bfs(start, goal_position)
-    print(f"BFS Path: {true_shortest_path}, Length: {len(true_shortest_path)}")
+
+    # Calculate total optimal path through all goals
+    total_shortest_path = []
+    current_pos = start
+    for goal in goals_positions:
+        shortest_segment, _ = bfs(current_pos, goal)
+        if shortest_segment:
+            total_shortest_path.extend(shortest_segment[:-1] if len(total_shortest_path) > 0 else shortest_segment)
+            current_pos = goal
+
+    print(f"Total shortest path length: {len(total_shortest_path)}")
 
     performance = {
-        "time (ms)": execution_time,
-        "space": space,
-        "optimality": "Yes" if path and len(path) == len(true_shortest_path) else "No",
-        "completeness": "Yes" if path else "No",
-        "cost": len(path) if path else 0
+        "time": execution_time,
+        "space": total_space,
+        "optimality": "Yes" if final_path and len(final_path) == len(total_shortest_path) else "No",
+        "completeness": "Yes" if final_path else "No",
+        "cost": len(final_path) if final_path else 0
     }
 
     return jsonify({
-        "path": path,
-        "cost": len(path) if path else 0,
+        "path": final_path,
+        "cost": len(final_path) if final_path else 0,
         "performance": performance
     })
-
 
 @app.route('/generate-map', methods=['GET'])
 def generate_map_route():
@@ -678,4 +704,5 @@ def generate_map_route():
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0')
+
  #endregion

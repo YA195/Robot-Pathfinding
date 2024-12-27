@@ -40,6 +40,11 @@
 
     <div class="sidebar">
         <h1>Robot Pathfinding</h1>
+        <div class="goal-setter">
+            <h2>Multiple Goals</h2>
+            
+            <p id="goalMessage">Click on tables to add/remove goals.</p>
+        </div>
         <button onclick="generateMap()">Generate Map</button>
 
         <div class="controls">
@@ -73,12 +78,11 @@
 <script>
     let currentStep = 0;
     let path = [];
-    let goal = null;
-    let currentMap = null;
-
+    let goals = new Set(); // Add this line to define goals
+    let currentMap = null; 
     function fetchPath(algorithm) {
-        if (!goal) {
-            alert("Please set the goal before running an algorithm.");
+        if (goals.size === 0) {
+            alert("Please set at least one goal before running an algorithm.");
             return;
         }
         clearOldPath();
@@ -86,17 +90,22 @@
         fetch(`/path?algorithm=${algorithm}`)
             .then(response => response.json())
             .then(data => {
+                if (data.error) {
+                    console.log(data.error);
+                    return;
+                }
                 path = data.path || [];
                 document.getElementById('cost').innerText = `Cost: ${data.cost} steps`;
                 const endTime = performance.now();
                 const elapsedTimeInMicroseconds = ((endTime - startTime) * 1000).toFixed(0);
-                data.performance.time = elapsedTimeInMicroseconds;
-                updateComparisonTable(data.performance, algorithm);
+                if (data.performance) {
+                    data.performance.time = elapsedTimeInMicroseconds;
+                    updateComparisonTable(data.performance, algorithm);
+                }
                 drawPathStepByStep();
             })
-            .catch(error => console.error('Error:', error));
+            .catch(error => console.log('Error:', error));
     }
-
     function clearOldPath() {
         const cells = document.querySelectorAll('.cell.path');
         cells.forEach(cell => cell.classList.remove('path'));
@@ -187,24 +196,29 @@
     document.getElementById('grid').addEventListener('click', function(event) {
         const cell = event.target;
         if (cell.classList.contains('table')) {
-            const row = cell.dataset.row;
-            const col = cell.dataset.col;
-            goal = [parseInt(row), parseInt(col)];
-
+            const row = parseInt(cell.dataset.row);
+            const col = parseInt(cell.dataset.col);
+            const goalStr = `${row},${col}`;
+            
+            if (goals.has(goalStr)) {
+                goals.delete(goalStr);
+            } else {
+                goals.add(goalStr);
+            }
+            
             fetch('/set_goal', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ goal })
+                body: JSON.stringify({ goals: Array.from(goals).map(g => g.split(',').map(Number)) })
             })
             .then(response => response.json())
             .then(data => {
-                document.getElementById('goalMessage').innerText = `Goal set at (${row}, ${col})`;
+                document.getElementById('goalMessage').innerText = `Goals set: ${Array.from(goals).join(' | ')}`;
                 clearOldPath();
                 clearComparisonTable();
             });
         }
-    });
-</script>
+    });</script>
 
 </body>
 </html>
