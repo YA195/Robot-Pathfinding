@@ -265,3 +265,14 @@ button:hover {
     background-color: #444;
     z-index: 1;
 }
+
+.cell.visited-1 { background-color: #3498db; }
+.cell.visited-2 { background-color: #2980b9; }
+.cell.visited-3 { background-color: #1f618d; }
+.cell.visited-4 { background-color: #154360; }
+.cell.visited-5 { background-color: #0a2133; }
+
+.cell.selected-goal {
+    background-color: #ffd700 !important; /* Bright yellow */
+    border: 2px solid #ff8c00; /* Orange border for better visibility */
+}

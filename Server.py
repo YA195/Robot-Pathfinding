@@ -693,7 +693,7 @@ def get_path():
                 for goal in goals_positions:
                     path_segment, space, reward, current_q_table = q_learning(current_position, goal)
                     if path_segment:
-                        final_path.extend(path_segment[:-1] if len(final_path) > 0 else path_segment)
+                        final_path.extend(path_segment if goal == goals_positions[-1] else path_segment[:-1])
                         total_space += space
                         total_reward += reward
                         q_table_data.update(current_q_table)

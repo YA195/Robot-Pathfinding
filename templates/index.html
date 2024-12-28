@@ -142,37 +142,44 @@
         cells.forEach(cell => cell.classList.remove('path'));
         currentStep = 0;
     }
-      function drawPathStepByStep() {
-      const stepSound = document.getElementById('stepSound');
-      const goalSound = document.getElementById('goalSound');
-      const previousRobot = document.querySelector('.robot-head');
-      if (previousRobot) {
-          previousRobot.classList.remove('robot-head');
-      }
-    
-      if (currentStep < path.length) {
-          const [y, x] = path[currentStep];
-          const cell = document.querySelector(`#grid .cell[data-row="${y}"][data-col="${x}"]`);
-          if (cell) {
-              cell.classList.add('path');
-              cell.classList.add('robot-head');
+    function drawPathStepByStep() {
+    const stepSound = document.getElementById('stepSound');
+    const goalSound = document.getElementById('goalSound');
+    const previousRobot = document.querySelector('.robot-head');
+    if (previousRobot) {
+        previousRobot.classList.remove('robot-head');
+    }
+
+    if (currentStep < path.length) {
+        const [y, x] = path[currentStep];
+        const cell = document.querySelector(`#grid .cell[data-row="${y}"][data-col="${x}"]`);
+        if (cell) {
+            // Get current visit count
+            let visitCount = parseInt(cell.dataset.visits || 0) + 1;
+            cell.dataset.visits = visitCount;
             
-              // Play step sound for regular moves
-              stepSound.currentTime = 0;
-              stepSound.play();
+            // Remove any existing visited classes
+            cell.classList.remove('visited-1', 'visited-2', 'visited-3', 'visited-4', 'visited-5');
             
-              // Play victory sound when reaching the goal
-              if (currentStep === path.length - 1) {
-                  setTimeout(() => {
-                      goalSound.currentTime = 0;
-                      goalSound.play();
-                  }, 300);
-              }
-          }
-          currentStep++;
-          setTimeout(drawPathStepByStep, 300);
-      }
-  }
+            // Add appropriate visited class (max 5 levels)
+            cell.classList.add(`visited-${Math.min(visitCount, 5)}`);
+            cell.classList.add('robot-head');
+
+            stepSound.currentTime = 0;
+            stepSound.play();
+
+            if (currentStep === path.length - 1) {
+                setTimeout(() => {
+                    goalSound.currentTime = 0;
+                    goalSound.play();
+                }, 300);
+            }
+        }
+        currentStep++;
+        setTimeout(drawPathStepByStep, 300);
+    }
+}
+
     
 
     function updateComparisonTable(performance, algorithm) {
@@ -248,31 +255,40 @@
     }
 
     document.getElementById('grid').addEventListener('click', function(event) {
-        const cell = event.target;
-        if (cell.classList.contains('table')) {
-            const row = parseInt(cell.dataset.row);
-            const col = parseInt(cell.dataset.col);
-            const goalStr = `${row},${col}`;
-            
-            if (goals.has(goalStr)) {
-                goals.delete(goalStr);
-            } else {
-                goals.add(goalStr);
-            }
-            
-            fetch('/set_goal', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ goals: Array.from(goals).map(g => g.split(',').map(Number)) })
-            })
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById('goalMessage').innerText = `Goals set: ${Array.from(goals).join(' | ')}`;
-                clearOldPath();
-                clearComparisonTable();
-            });
+    const cell = event.target;
+    if (cell.classList.contains('table')) {
+        const row = parseInt(cell.dataset.row);
+        const col = parseInt(cell.dataset.col);
+        const goalStr = `${row},${col}`;
+        
+        if (goals.has(goalStr)) {
+            goals.delete(goalStr);
+            cell.classList.remove('selected-goal');
+        } else {
+            goals.add(goalStr);
+            cell.classList.add('selected-goal');
         }
-    });
+        
+        // Clear all path visualizations
+        const cells = document.querySelectorAll('.cell');
+        cells.forEach(cell => {
+            cell.classList.remove('path', 'visited-1', 'visited-2', 'visited-3', 'visited-4', 'visited-5');
+            delete cell.dataset.visits;
+        });
+        currentStep = 0;
+        
+        fetch('/set_goal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ goals: Array.from(goals).map(g => g.split(',').map(Number)) })
+        })
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('goalMessage').innerText = `Goals set: ${Array.from(goals).join(' | ')}`;
+            clearComparisonTable();
+        });
+    }
+});
     function updateQTable(qTableData) {
     const tableBody = document.getElementById('qTableBody');
     tableBody.innerHTML = '';
