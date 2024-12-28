@@ -19,25 +19,49 @@
             {% endfor %}
         {% endfor %}
     </div>
+      <div class="comparison-table">
+          <div class="table-header">
+              <h2>Algorithm Analysis</h2>
+              <div class="table-switch">
+                  <button class="switch-btn active" onclick="switchTable('comparison')">Comparison</button>
+                  <button class="switch-btn" onclick="switchTable('qlearning')">Q-Learning</button>
+              </div>
+          </div>
+    
+          <div id="comparisonTable" class="table-content active">
+              <table>
+                  <thead>
+                      <tr>
+                          <th>Algorithm</th>
+                          <th>Time (µs)</th>
+                          <th>Space</th>
+                          <th>Optimality</th>
+                          <th>Completeness</th>
+                          <th>Cost</th>
+                          <th>Reward</th>
+                      </tr>
+                  </thead>
+                  <tbody id="comparisonTableBody">
+                  </tbody>
+              </table>
+          </div>
 
-    <div class="comparison-table">
-        <h2>Algorithm Comparison</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Algorithm</th>
-                    <th>Time (µs)</th>
-                    <th>Space</th>
-                    <th>Optimality</th>
-                    <th>Completeness</th>
-                    <th>Cost</th>
-                    <th>Reward</th>
-                </tr>
-            </thead>
-            <tbody id="comparisonTableBody">
-            </tbody>
-        </table>
-    </div>
+          <div id="qLearningTable" class="table-content">
+              <table>
+                  <thead>
+                      <tr>
+                          <th>State</th>
+                          <th>Up</th>
+                          <th>Down</th>
+                          <th>Left</th>
+                          <th>Right</th>
+                      </tr>
+                  </thead>
+                  <tbody id="qTableBody">
+                  </tbody>
+              </table>
+          </div>
+      </div>
 
     <div class="sidebar">
         <h1>Robot Pathfinding</h1>
@@ -103,6 +127,11 @@
                 if (data.performance) {
                     data.performance.time = elapsedTimeInMicroseconds;
                     updateComparisonTable(data.performance, algorithm);
+                }
+                // Switch to Q-learning table if using Q-learning
+                if (algorithm === 'q_learning' && data.q_table) {
+                    switchTable('qlearning');
+                    updateQTable(data.q_table);
                 }
                 drawPathStepByStep();
             })
@@ -243,7 +272,40 @@
                 clearComparisonTable();
             });
         }
-    });</script>
+    });
+    function updateQTable(qTableData) {
+    const tableBody = document.getElementById('qTableBody');
+    tableBody.innerHTML = '';
+    
+    for (const [state, actions] of Object.entries(qTableData)) {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${state}</td>
+            <td class="${actions.up === Math.max(...Object.values(actions)) ? 'highest-q' : ''}">${actions.up.toFixed(2)}</td>
+            <td class="${actions.down === Math.max(...Object.values(actions)) ? 'highest-q' : ''}">${actions.down.toFixed(2)}</td>
+            <td class="${actions.left === Math.max(...Object.values(actions)) ? 'highest-q' : ''}">${actions.left.toFixed(2)}</td>
+            <td class="${actions.right === Math.max(...Object.values(actions)) ? 'highest-q' : ''}">${actions.right.toFixed(2)}</td>
+        `;
+        tableBody.appendChild(row);
+    }
+}
+function switchTable(tableType) {
+    // Update buttons
+    document.querySelectorAll('.switch-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelector(`[onclick="switchTable('${tableType}')"]`).classList.add('active');
+    
+    // Update tables
+    document.querySelectorAll('.table-content').forEach(table => table.classList.remove('active'));
+    if (tableType === 'comparison') {
+        document.getElementById('comparisonTable').classList.add('active');
+    } else {
+        document.getElementById('qLearningTable').classList.add('active');
+    }
+}
+
+
+
+    </script>
 
 </body>
 </html>
@@ -264,3 +326,4 @@
 <audio id="goalSound" preload="auto">
     <source src="{{ url_for('static', filename='goal.mp3') }}" type="audio/mp3">
 </audio>
+

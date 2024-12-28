@@ -198,3 +198,68 @@ button:hover {
 .robot-head::after {
   content: '🤖';
 }
+.table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.table-switch {
+  display: flex;
+  gap: 10px;
+}
+
+.switch-btn {
+  background-color: #444;
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.switch-btn.active {
+  background-color: #3498db;
+}
+
+.table-content {
+  display: none;
+}
+
+.table-content.active {
+  display: block;
+}
+
+/* Add these styles to your existing comparison-table class */
+.table-content {
+    max-height: 400px;  /* Adjust height as needed */
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #888 #333;
+}
+
+.table-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.table-content::-webkit-scrollbar-thumb {
+    background-color: #888;
+    border-radius: 4px;
+}
+
+.table-content::-webkit-scrollbar-track {
+    background: #333;
+}
+
+/* Keep table header fixed */
+.table-content table {
+    position: relative;
+}
+
+.table-content thead {
+    position: sticky;
+    top: 0;
+    background-color: #444;
+    z-index: 1;
+}

@@ -105,7 +105,7 @@ def bfs(start, goal):
     while queue:
         max_queue_size = max(max_queue_size, len(queue))
         current = queue.popleft()
-        if current == goal:
+        if current in goal:
             break
         for dy, dx in DIRECTIONS:
             ny, nx = current[0] + dy, current[1] + dx
@@ -131,7 +131,7 @@ def dfs(start, goal):
     while stack:
         max_stack_size = max(max_stack_size, len(stack))
         current = stack.pop()
-        if current == goal:
+        if current in goal:
             break
         for dy, dx in DIRECTIONS:
             ny, nx = current[0] + dy, current[1] + dx
@@ -160,7 +160,7 @@ def IDS(start, goal, limit):
 
     while stack:
         current = stack.pop()
-        if current == goal:
+        if current in goal:
             break
 
         if cost[current] < limit:
@@ -208,7 +208,7 @@ def ucs(start, goal):
 
         visited.add(current)
 
-        if current == goal:
+        if current in goal:
             break
 
         for direction in DIRECTIONS:
@@ -261,7 +261,7 @@ def greedy_best_first_search(start, goal, h_function):
         frontier.sort()
         heuristic_value, current = frontier.pop(0)
 
-        if current == goal:
+        if current in goal:
             path = []
             current_heuristics = []
             while current:
@@ -305,7 +305,7 @@ def a_star_search(start, goal, h_function):
         frontier.sort()
         f_value, current = frontier.pop(0)
 
-        if current == goal:
+        if current in goal:
             path = []
             current_heuristics = []
             current_costs = []
@@ -458,7 +458,7 @@ def simulated_annealing(start, goal, h_function, initial_temp=1000, cooling_rate
 
         temperature *= cooling_rate
 
-        if current == goal:
+        if current in goal:
             break
 
     return path, max_space
@@ -575,25 +575,18 @@ def genetic_algorithm(start, goal, population_size=100, generations=1000, mutati
 
 
 def get_reward(current_state, next_state, goal, path_length):
-    # Distance metrics
     current_distance = abs(current_state[0] - goal[0]) + abs(current_state[1] - goal[1])
     next_distance = abs(next_state[0] - goal[0]) + abs(next_state[1] - goal[1])
     
-    # Core rewards
     if next_state == goal:
         return 2000
     
     if not is_valid_move(next_state[0], next_state[1]):
         return -1000
     
-    # Progressive rewards
     distance_improvement = current_distance - next_distance
     distance_reward = 100 * distance_improvement
-    
-    # Path optimization
     efficiency_factor = 100 / (path_length + 1)
-    
-    # Movement rewards
     movement_reward = 50 if next_distance < current_distance else -30
     
     return distance_reward + efficiency_factor + movement_reward
@@ -640,8 +633,16 @@ def q_learning(start, goal, episodes=500, alpha=0.1, gamma=0.9, epsilon=0.1):
             best_path = path.copy()
             total_reward = episode_reward
 
-    return best_path, max_space, total_reward
+    q_table_data = {}
+    for state in Q:
+        q_table_data[str(state)] = {
+            'up': float(Q[state][(-1, 0)]),
+            'down': float(Q[state][(1, 0)]),
+            'left': float(Q[state][(0, -1)]),
+            'right': float(Q[state][(0, 1)])
+        }
 
+    return best_path, max_space, total_reward, q_table_data
 
 # region Flask
 
@@ -685,13 +686,35 @@ def get_path():
         try:
             if algorithm == 'q_learning':
                 total_reward = 0
-                path_segment, space, reward = q_learning(current_position, goal)
-                print(f"Q-Learning space for goal {goal}: {space}, reward: {reward}")
-                if path_segment:
-                    final_path.extend(path_segment[:-1] if len(final_path) > 0 else path_segment)
-                    total_space += space
-                    total_reward += reward
-                    current_position = goal           
+                q_table_data = {}
+                
+                start_time = time.time()
+                
+                for goal in goals_positions:
+                    path_segment, space, reward, current_q_table = q_learning(current_position, goal)
+                    if path_segment:
+                        final_path.extend(path_segment[:-1] if len(final_path) > 0 else path_segment)
+                        total_space += space
+                        total_reward += reward
+                        q_table_data.update(current_q_table)
+                        current_position = goal
+
+                end_time = time.time()
+                execution_time = int((end_time - start_time) * 1000)
+
+                return jsonify({
+                    "path": final_path,
+                    "cost": len(final_path) if final_path else 0,
+                    "performance": {
+                        "time": execution_time,
+                        "space": total_space,
+                        "optimality": "Yes" if final_path else "No",
+                        "completeness": "Yes" if final_path else "No",
+                        "cost": len(final_path) if final_path else 0,
+                        "reward": total_reward
+                    },
+                    "q_table": q_table_data
+                })
             elif algorithm == 'bfs':
                 path_segment, space = bfs(current_position, goal)
                 print(f"BFS space for goal {goal}: {space}")
@@ -730,7 +753,7 @@ def get_path():
                 return jsonify({"error": "Algorithm not found"}), 404
 
             if path_segment:
-                final_path.extend(path_segment[:-1] if len(final_path) > 0 else path_segment)
+                final_path.extend(path_segment if goal == goals_positions[-1] else path_segment[:-1])
                 total_space += space
                 current_position = goal
 
