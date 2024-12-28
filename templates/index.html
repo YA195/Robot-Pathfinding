@@ -25,6 +25,7 @@
               <div class="table-switch">
                   <button class="switch-btn active" onclick="switchTable('comparison')">Comparison</button>
                   <button class="switch-btn" onclick="switchTable('qlearning')">Q-Learning</button>
+                  <button class="switch-btn" onclick="switchTable('training')">Training Progress</button>
               </div>
           </div>
     
@@ -45,7 +46,24 @@
                   </tbody>
               </table>
           </div>
-
+          <div id="trainingTable" class="table-content">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Episode</th>
+                        <th>Reward</th>
+                        <th>Exploration Rate</th>
+                        <th>States Visited</th>
+                        <th>Path Length</th>
+                        <th>Avg Q-Value</th>
+                        <th>Policy Stability</th>
+                    </tr>
+                </thead>
+                <tbody id="trainingTableBody">
+                </tbody>
+            </table>
+        </div>
+        
           <div id="qLearningTable" class="table-content">
               <table>
                   <thead>
@@ -62,7 +80,6 @@
               </table>
           </div>
       </div>
-
     <div class="sidebar">
         <h1>Robot Pathfinding</h1>
         <div class="goal-setter">
@@ -101,11 +118,26 @@
     </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+
 <script>
     let currentStep = 0;
     let path = [];
     let goals = new Set(); // Add this line to define goals
     let currentMap = null; 
+    const socket = io({
+        transports: ['websocket'],
+        upgrade: false
+    });
+
+    // Listen for training updates
+    socket.on('connect', () => {
+        console.log('Connected to server');
+    });
+
+    socket.on('training_update', (data) => {
+        updateTrainingTable(data);
+    });
     function fetchPath(algorithm) {
         if (goals.size === 0) {
             alert("Please set at least one goal before running an algorithm.");
@@ -128,9 +160,17 @@
                     data.performance.time = elapsedTimeInMicroseconds;
                     updateComparisonTable(data.performance, algorithm);
                 }
-                // Switch to Q-learning table if using Q-learning
-                if (algorithm === 'q_learning' && data.q_table) {
-                    switchTable('qlearning');
+                
+                // Handle Q-learning specific data
+                if (algorithm === 'q_learning') {
+                    switchTable('training');  // Switch to training progress view
+                    if (data.training_data) {
+                        const trainingTableBody = document.getElementById('trainingTableBody');
+                        trainingTableBody.innerHTML = '';  // Clear existing data
+                        data.training_data.forEach(entry => {
+                            updateTrainingTable(entry);
+                        });
+                    }
                     updateQTable(data.q_table);
                 }
                 drawPathStepByStep();
@@ -289,6 +329,34 @@
         });
     }
 });
+
+document.getElementById('grid').addEventListener('mousemove', function(event) {
+    const cell = event.target;
+    if (cell.classList.contains('cell')) {
+        const col = cell.dataset.row;
+        const row = cell.dataset.col;
+        
+        // Create or update tooltip
+        let tooltip = document.querySelector('.cell-tooltip');
+        if (!tooltip) {
+            tooltip = document.createElement('div');
+            tooltip.className = 'cell-tooltip';
+            document.body.appendChild(tooltip);
+        }
+        
+        tooltip.textContent = `(${col}, ${row})`;  // X,Y format
+        tooltip.style.left = event.pageX + 10 + 'px';
+        tooltip.style.top = event.pageY + 10 + 'px';
+    }
+});
+
+document.getElementById('grid').addEventListener('mouseleave', function() {
+    const tooltip = document.querySelector('.cell-tooltip');
+    if (tooltip) {
+        tooltip.remove();
+    }
+});
+
     function updateQTable(qTableData) {
     const tableBody = document.getElementById('qTableBody');
     tableBody.innerHTML = '';
@@ -305,18 +373,63 @@
         tableBody.appendChild(row);
     }
 }
+function updateTrainingTable(data) {
+    const tableBody = document.getElementById('trainingTableBody');
+    const row = document.createElement('tr');
+    row.innerHTML = `
+        <td>${data.episode}</td>
+        <td>${data.reward.toFixed(2)}</td>
+        <td>${(data.exploration_rate * 100).toFixed(1)}%</td>
+        <td>${data.states_visited}</td>
+        <td>${data.path_length}</td>
+        <td>${data.avg_q_value.toFixed(2)}</td>
+        <td>${(data.policy_stability * 100).toFixed(1)}%</td>
+    `;
+    tableBody.appendChild(row);
+}
+
+function displayQValueSnapshots(snapshots) {
+    const snapshotDiv = document.createElement('div');
+    snapshotDiv.className = 'q-value-snapshots';
+    snapshots.forEach(snapshot => {
+        snapshotDiv.innerHTML += `
+            <h4>Episode ${snapshot.episode}</h4>
+            <div class="policy-visualization">
+                ${visualizePolicy(snapshot.policy)}
+            </div>
+        `;
+    });
+    document.querySelector('.comparison-table').appendChild(snapshotDiv);
+}
 function switchTable(tableType) {
-    // Update buttons
     document.querySelectorAll('.switch-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelector(`[onclick="switchTable('${tableType}')"]`).classList.add('active');
     
-    // Update tables
     document.querySelectorAll('.table-content').forEach(table => table.classList.remove('active'));
     if (tableType === 'comparison') {
         document.getElementById('comparisonTable').classList.add('active');
-    } else {
+    } else if (tableType === 'qlearning') {
         document.getElementById('qLearningTable').classList.add('active');
+    } else {
+        document.getElementById('trainingTable').classList.add('active');
     }
+}socket.on('training_update', function(data) {
+    document.getElementById('episodeCounter').textContent = 
+        `Episode: ${data.episode}/1000`;
+    document.getElementById('explorationRate').textContent = 
+        `Exploration Rate: ${(data.exploration_rate * 100).toFixed(1)}%`;
+    
+    updateHeatmap(data.states_visited);
+});
+
+function updateHeatmap(visitedStates) {
+    const cells = document.querySelectorAll('.cell');
+    cells.forEach(cell => {
+        const pos = `${cell.dataset.row},${cell.dataset.col}`;
+        if (visitedStates.includes(pos)) {
+            cell.classList.add('visited');
+        }
+    });
 }
 
 
@@ -342,4 +455,9 @@ function switchTable(tableType) {
 <audio id="goalSound" preload="auto">
     <source src="{{ url_for('static', filename='goal.mp3') }}" type="audio/mp3">
 </audio>
+
+
+
+
+
 

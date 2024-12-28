@@ -1,5 +1,7 @@
 from flask import Flask, render_template, jsonify, request
 from collections import deque, defaultdict
+from flask_socketio import SocketIO
+
 import random
 import time  
 import heapq
@@ -7,6 +9,7 @@ import math
 
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # region Map
 
@@ -578,71 +581,135 @@ def get_reward(current_state, next_state, goal, path_length):
     current_distance = abs(current_state[0] - goal[0]) + abs(current_state[1] - goal[1])
     next_distance = abs(next_state[0] - goal[0]) + abs(next_state[1] - goal[1])
     
+    # Base rewards
     if next_state == goal:
-        return 2000
+        return 100  # Reduced from 2000 to balance values
     
     if not is_valid_move(next_state[0], next_state[1]):
-        return -1000
+        return -100  # Reduced from -1000
     
+    # Movement rewards
     distance_improvement = current_distance - next_distance
-    distance_reward = 100 * distance_improvement
-    efficiency_factor = 100 / (path_length + 1)
-    movement_reward = 50 if next_distance < current_distance else -30
-    
-    return distance_reward + efficiency_factor + movement_reward
-
-def q_learning(start, goal, episodes=500, alpha=0.1, gamma=0.9, epsilon=0.1):
+    return 20 * distance_improvement - 1  # Small penalty for each step
+def q_learning(start, goals, episodes=1000, alpha=0.1, gamma=0.9, epsilon_start=1.0):
     Q = defaultdict(lambda: defaultdict(float))
     actions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
     best_path = []
     max_space = 0
     total_reward = 0
+    current_pos = start
+    final_path = []
+    training_data = []
+    epsilon = epsilon_start
+    midway_point = episodes // 2
+    q_value_snapshots = []
 
-    for episode in range(episodes):
-        current_state = start
-        path = [current_state]
-        episode_reward = 0
-        visited = {current_state}
-        
-        while current_state != goal:
-            valid_actions = [a for a in actions if is_valid_move(current_state[0] + a[0], current_state[1] + a[1])]
-            if not valid_actions:
-                break
+    for goal in goals:
+        for episode in range(episodes):
+            current_state = current_pos
+            path = [current_state]
+            episode_reward = 0
+            visited = {current_state}
+            
+            if episode == midway_point or episode == episodes - 1:
+                serializable_q_values = {str(k): {str(a): v for a, v in val.items()} 
+                                      for k, val in Q.items()}
+                policy = {str(k): str(v) for k, v in analyze_current_policy(Q).items()}
+                q_value_snapshots.append({
+                    'episode': episode,
+                    'q_values': serializable_q_values,
+                    'policy': policy
+                })
+            
+            while current_state != goal and len(path) < 100:
+                valid_actions = [action for action in actions 
+                               if is_valid_move(current_state[0] + action[0], 
+                                              current_state[1] + action[1])]
                 
-            if random.random() < epsilon:
-                action = random.choice(valid_actions)
-            else:
-                action = max(valid_actions, key=lambda a: Q[current_state][a])
-            
-            next_state = (current_state[0] + action[0], current_state[1] + action[1])
-            reward = get_reward(current_state, next_state, goal, len(path))
-            episode_reward += reward
-            
-            next_max = max([Q[next_state][a] for a in valid_actions], default=0)
-            Q[current_state][action] += alpha * (reward + gamma * next_max - Q[current_state][action])
-            
-            current_state = next_state
-            path.append(current_state)
-            visited.add(current_state)
-            max_space = max(max_space, len(visited))
-            
-            if len(path) > 100:
-                break
-        
-        if current_state == goal and (not best_path or len(path) < len(best_path)):
-            best_path = path.copy()
-            total_reward = episode_reward
+                if not valid_actions:
+                    break
+                
+                action = random.choice(valid_actions) if random.random() < epsilon \
+                        else max(valid_actions, key=lambda a: Q[current_state][a])
+                
+                next_state = (current_state[0] + action[0], current_state[1] + action[1])
+                reward = get_reward(current_state, next_state, goal, len(path))
+                
+                next_max = max([Q[next_state][a] for a in valid_actions], default=0)
+                Q[current_state][action] += alpha * (reward + gamma * next_max - Q[current_state][action])
+                
+                current_state = next_state
+                path.append(current_state)
+                visited.add(current_state)
+                episode_reward += reward
+                max_space = max(max_space, len(visited))
 
+            training_data.append({
+                'episode': episode,
+                'reward': float(episode_reward),
+                'exploration_rate': float(epsilon),
+                'states_visited': len(visited),
+                'path_length': len(path),
+                'avg_q_value': float(calculate_avg_q_value(Q)),
+                'policy_stability': float(calculate_policy_stability(Q))
+            })
+            
+            epsilon *= 0.995
+
+            if current_state == goal and (not best_path or len(path) < len(best_path)):
+                best_path = path.copy()
+                total_reward += episode_reward
+
+        if best_path:
+            final_path.extend(best_path if goal == goals[-1] else best_path[:-1])
+            current_pos = goal
+            best_path = []
+
+    q_table_data = {str(state): {
+        'up': float(Q[state][(-1, 0)]),
+        'down': float(Q[state][(1, 0)]),
+        'left': float(Q[state][(0, -1)]),
+        'right': float(Q[state][(0, 1)])
+    } for state in Q}
+
+    return final_path, max_space, float(total_reward), q_table_data, training_data, q_value_snapshots
+
+def analyze_current_policy(Q):
+    policy = {}
+    for state in Q:
+        policy[state] = max(Q[state].items(), key=lambda x: x[1])[0]
+    return policy
+
+def calculate_avg_q_value(Q):
+    if not Q:
+        return 0
+    total = sum(max(state_values.values()) for state_values in Q.values())
+    return total / len(Q)
+
+def calculate_policy_stability(Q):
+    total_states = len(Q)
+    if total_states == 0:
+        return 0
+    stable_states = sum(1 for state_values in Q.values() 
+                       if max(state_values.values()) > 0.8 * sum(state_values.values()))
+    return stable_states / total_states
+
+def normalize_q_table(Q):
     q_table_data = {}
     for state in Q:
-        q_table_data[str(state)] = {
+        values = {
             'up': float(Q[state][(-1, 0)]),
             'down': float(Q[state][(1, 0)]),
             'left': float(Q[state][(0, -1)]),
             'right': float(Q[state][(0, 1)])
         }
+        # Normalize values to reasonable range
+        max_abs = max(abs(v) for v in values.values())
+        if max_abs > 0:
+            values = {k: round(v / max_abs * 100, 2) for k, v in values.items()}
+        q_table_data[str(state)] = values
+    return q_table_data
 
-    return best_path, max_space, total_reward, q_table_data
 
 # region Flask
 
@@ -682,73 +749,53 @@ def get_path():
     final_path = []
     total_space = 0
 
-    for goal in goals_positions:
-        try:
-            if algorithm == 'q_learning':
-                total_reward = 0
-                q_table_data = {}
-                
-                start_time = time.time()
-                
-                for goal in goals_positions:
-                    path_segment, space, reward, current_q_table = q_learning(current_position, goal)
-                    if path_segment:
-                        final_path.extend(path_segment if goal == goals_positions[-1] else path_segment[:-1])
-                        total_space += space
-                        total_reward += reward
-                        q_table_data.update(current_q_table)
-                        current_position = goal
+    try:
+        if algorithm == 'q_learning':
+            final_path, total_space, total_reward, q_table_data, training_data, q_value_snapshots = q_learning(current_position, goals_positions)
+            end_time = time.time()
+            execution_time = int((end_time - start_time) * 1000)
 
-                end_time = time.time()
-                execution_time = int((end_time - start_time) * 1000)
-
-                return jsonify({
-                    "path": final_path,
+            return jsonify({
+                "path": final_path,
+                "cost": len(final_path) if final_path else 0,
+                "performance": {
+                    "time": execution_time,
+                    "space": total_space,
+                    "optimality": "Yes" if final_path else "No",
+                    "completeness": "Yes" if final_path else "No",
                     "cost": len(final_path) if final_path else 0,
-                    "performance": {
-                        "time": execution_time,
-                        "space": total_space,
-                        "optimality": "Yes" if final_path else "No",
-                        "completeness": "Yes" if final_path else "No",
-                        "cost": len(final_path) if final_path else 0,
-                        "reward": total_reward
-                    },
-                    "q_table": q_table_data
-                })
-            elif algorithm == 'bfs':
+                    "reward": total_reward
+                },
+                "q_table": q_table_data,
+                "training_data": training_data,
+                "q_value_snapshots": q_value_snapshots
+            })
+
+        
+        # Original code for other algorithms
+        for goal in goals_positions:
+            if algorithm == 'bfs':
                 path_segment, space = bfs(current_position, goal)
-                print(f"BFS space for goal {goal}: {space}")
             elif algorithm == 'dfs':
                 path_segment, space = dfs(current_position, goal)
-                print(f"DFS space for goal {goal}: {space}")
             elif algorithm == 'ids':
                 path_segment, space, cost = iterative_deepening_search(current_position, goal)
-                print(f"IDS space for goal {goal}: {space}")
             elif algorithm == 'ucs':
                 path_segment, space, cost = ucs(current_position, goal)
-                print(f"UCS space for goal {goal}: {space}")
             elif algorithm == 'greedy_manhattan':
                 path_segment, heuristics, cost, space = greedy_best_first_search(current_position, goal, heuristic_manhattan)
-                print(f"Greedy Manhattan space for goal {goal}: {space}")
             elif algorithm == 'greedy_euclidean':
                 path_segment, heuristics, cost, space = greedy_best_first_search(current_position, goal, heuristic_euclidean)
-                print(f"Greedy Euclidean space for goal {goal}: {space}")
             elif algorithm == 'astar_euclidean':
                 path_segment, heuristics, current_cost, f_value, total_cost, space = a_star_search(current_position, goal, heuristic_euclidean)
-                print(f"A* Euclidean space for goal {goal}: {space}")
             elif algorithm == 'astar_manhattan':
                 path_segment, heuristics, current_cost, f_value, total_cost, space = a_star_search(current_position, goal, heuristic_manhattan)
-                print(f"A* Manhattan space for goal {goal}: {space}")
             elif algorithm == 'hill_climbing':
                 path_segment, space = hill_climbing(current_position, goal, heuristic_manhattan)
-                print(f"Hill Climbing space for goal {goal}: {space}")
             elif algorithm == 'simulated_annealing':
                 path_segment, space = simulated_annealing(current_position, goal, heuristic_manhattan)
-                print(f"Simulated Annealing space for goal {goal}: {space}")
             elif algorithm == 'genetic_algorithms':
-                path_segment, fitness_score = genetic_algorithm(current_position, goal)
-                space = len(path_segment)
-                print(f"Genetic Algorithms space for goal {goal}: {space}")
+                path_segment, space = genetic_algorithm(current_position, goal)
             else:
                 return jsonify({"error": "Algorithm not found"}), 404
 
@@ -757,34 +804,22 @@ def get_path():
                 total_space += space
                 current_position = goal
 
-        except Exception as e:
-            return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+    except Exception as e:
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
 
     end_time = time.time()
     execution_time = int((end_time - start_time) * 1000)
 
-    total_shortest_path = []
-    current_pos = start
-    for goal in goals_positions:
-        shortest_segment, _ = bfs(current_pos, goal)
-        if shortest_segment:
-            total_shortest_path.extend(shortest_segment[:-1] if len(total_shortest_path) > 0 else shortest_segment)
-            current_pos = goal
-
-    performance = {
-        "time": execution_time,
-        "space": total_space,
-        "optimality": "Yes" if final_path and len(final_path) == len(total_shortest_path) else "No",
-        "completeness": "Yes" if final_path else "No",
-        "cost": len(final_path) if final_path else 0,
-        "reward": total_reward if 'total_reward' in locals() else 0
-
-    }
-
     return jsonify({
         "path": final_path,
         "cost": len(final_path) if final_path else 0,
-        "performance": performance
+        "performance": {
+            "time": execution_time,
+            "space": total_space,
+            "optimality": "Yes" if final_path else "No",
+            "completeness": "Yes" if final_path else "No",
+            "cost": len(final_path) if final_path else 0
+        }
     })
 
 @app.route('/generate-map', methods=['GET'])
@@ -794,7 +829,7 @@ def generate_map_route():
     return jsonify({"map_layout": map_layout})
 
 if __name__ == "__main__":
-    app.run(debug=True, host='0.0.0.0')
+    socketio.run(app, debug=True)
 
  #endregion
 
