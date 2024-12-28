@@ -222,6 +222,8 @@ button:hover {
 .switch-btn.active {
   background-color: #3498db;
 }
+ 
+
 
 .table-content {
   display: none;
